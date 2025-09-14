@@ -192,14 +192,18 @@ void PlayMode::update(float elapsed) {
 		for (Collider *col : colliders) {
 			if (col == &player.col) continue;
 			if (player.col.intersect(*col)) {
-				std::cout << end_pos.x << ", " << end_pos.y << " " << end_pos.z << std::endl;
-				player.col.clip_movement(*col, start_pos, &end_pos);
-				std::cout << end_pos.x << ", " << end_pos.y << " " << end_pos.z << std::endl;
-				std::cout << start_pos.x << ", " << start_pos.y << " " << start_pos.z << std::endl;
-				if ((*col).clip_movement(player.col, player.transform.position + glm::vec3(move, 0.f), &start_pos)) {
-					end_pos = player.transform.position + glm::normalize(end_pos - start_pos) * glm::length(end_pos - start_pos);
+				if (player.col.clip_movement(*col, start_pos, &end_pos) &&
+					(*col).clip_movement(player.col, player.transform.position + glm::vec3(move, 0.f), &start_pos)) {
+					if (glm::length(end_pos - start_pos) >= player.col.size.x) {
+						end_pos = player.transform.position + glm::normalize(end_pos - start_pos) * glm::length(end_pos - start_pos);
+					}
+					else {
+						end_pos = player.transform.position;
+					}
 				}
-				std::cout << start_pos.x << ", " << start_pos.y << " " << start_pos.z << std::endl;
+				else {
+					end_pos = player.transform.position + glm::vec3(move, 0.f);
+				}
 			}
 		}
 

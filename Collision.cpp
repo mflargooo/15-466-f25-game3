@@ -41,11 +41,14 @@ bool Collider::intersect(Collider other) {
 // (only problem is that this happens at the center only---if it causes problems for this game, perform this
 //  over a small grid based on size of collider)
 bool Collider::clip_movement(Collider other, glm::highp_vec3 start, glm::highp_vec3 *end) {
+    if (*end - start == glm::highp_vec3(0.0f)) return false;
     if (!intersect(other)) return false;
     
+    float dist = glm::length(*end - start);
     glm::highp_vec3 dir = glm::normalize(*end - start);
 
     // convert world direction and world position to this object space
+    glm::highp_vec3 start_obj_space = obj_transform->make_local_from_world() * glm::highp_vec4(start, 0.f);
     glm::highp_vec3 dir_obj_space = obj_transform->make_local_from_world() * glm::highp_vec4(dir, 0.f);
 
     // my (modified) ray-bbox intersection code from 15-362 computer graphics
@@ -58,10 +61,6 @@ bool Collider::clip_movement(Collider other, glm::highp_vec3 start, glm::highp_v
     glm::highp_vec3 bounds[2] = { min, max };
     glm::highp_vec3 invdir = 1.f / dir_obj_space;
 
-    if (dir_obj_space.x == 0.f) invdir.x = 0.f;
-    if (dir_obj_space.y == 0.f) invdir.y = 0.f;
-    if (dir_obj_space.z == 0.f) invdir.z = 0.f;
-
     int sign[3];
     sign[0] = dir_obj_space.x < 0;
     sign[1] = dir_obj_space.y < 0;
@@ -69,25 +68,22 @@ bool Collider::clip_movement(Collider other, glm::highp_vec3 start, glm::highp_v
 
     float tmin, tmax, tymin, tymax, tzmin, tzmax;
     if (dir_obj_space.x != 0.f) {
-        tmin = (bounds[sign[0]].x - start.x) * invdir.x;
-        tmax = (bounds[1 - sign[0]].x - start.x) * invdir.x;
-
+        tmin = (bounds[sign[0]].x - start_obj_space.x) * invdir.x;
+        tmax = (bounds[1 - sign[0]].x - start_obj_space.x) * invdir.x;
     }
     else {
         tmin = -std::numeric_limits<float>::infinity();
         tmax = std::numeric_limits<float>::infinity();
     }
-    std::cout << tmin << ", " << tmax << std::endl;
 
     if (dir_obj_space.y != 0.f) {
-        tymin = (bounds[sign[1]].y - start.y) * invdir.y;
-        tymax = (bounds[1 - sign[1]].y - start.y) * invdir.y;
+        tymin = (bounds[sign[1]].y - start_obj_space.y) * invdir.y;
+        tymax = (bounds[1 - sign[1]].y - start_obj_space.y) * invdir.y;
     }
     else {
         tymin = -std::numeric_limits<float>::infinity();
         tymax = std::numeric_limits<float>::infinity();
     }
-    std::cout << tymin << ", " << tymax << std::endl;
 
     if (tmin > tymax || tymin > tmax) {
         return false;
@@ -101,14 +97,13 @@ bool Collider::clip_movement(Collider other, glm::highp_vec3 start, glm::highp_v
     }
 
     if (dir_obj_space.z != 0.f) {
-        tzmin = (bounds[sign[2]].z - start.z) * invdir.z;
-        tzmax = (bounds[1 - sign[2]].z - start.z) * invdir.z;
+        tzmin = (bounds[sign[2]].z - start_obj_space.z) * invdir.z;
+        tzmax = (bounds[1 - sign[2]].z - start_obj_space.z) * invdir.z;
     }
     else {
         tzmin = -std::numeric_limits<float>::infinity();
         tzmax = std::numeric_limits<float>::infinity();
     }
-    std::cout << tzmin << ", " << tzmax << std::endl;
 
     if (tmin > tzmax || tzmin > tmax) {
         return false;
@@ -122,15 +117,16 @@ bool Collider::clip_movement(Collider other, glm::highp_vec3 start, glm::highp_v
     }
 
     // checking dist bounds
-    if (tmax < end->x || tmin > end->y) {
+    if (tmax < 0.f || tmin > 1.f) {
         return false;
     }
 
-    if (tmax < time)
-        time = tmax;
+    // normalize
+    if (tmin > time)
+        time = tmin;
+    if (time < .01f) time = 0.f;
 
     // update end position
-    *end = dir * time * glm::length(*end - start);
-    std::cout << "TIME: " << time << std::endl; 
+    *end = start + dir * time * dist;
     return true;
 }

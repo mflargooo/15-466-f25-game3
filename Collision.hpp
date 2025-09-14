@@ -2,6 +2,7 @@
 
 #include "glm/glm.hpp"
 #include "Scene.hpp"
+#include "DrawLines.hpp"
 
 struct Collider {
     glm::vec3 size = glm::vec3(1.f);
@@ -15,7 +16,7 @@ struct Collider {
     // given a start position and end, if movement from "start" to "end" were to cross
     // the collider, clamp movement respectively, and account for collider width
     // updates the end position
-    bool clip_movement(Collider other, glm::vec3 start, glm::vec3 *end);
+    bool clip_movement(Collider other, glm::highp_vec3 &dir, float &dist, uint8_t granularity=3);
 
     private:
         Scene::Transform *obj_transform;

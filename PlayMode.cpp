@@ -91,6 +91,7 @@ PlayMode::PlayMode() : scene(*test_scene) {
 
 	Scene::Transform *transform = new Scene::Transform();
 	colliders.emplace_back(new Collider(transform));
+	colliders.back()->size.y = 10.f;
 
 	transform->position = glm::vec3(2.f, 0.f, 0.f);
 }
@@ -186,28 +187,17 @@ void PlayMode::update(float elapsed) {
 		//make it so that moving diagonally doesn't go faster:
 		if (move != glm::vec2(0.0f)) move = glm::normalize(move) * PlayerSpeed * elapsed;
 
-		glm::vec3 end_pos = player.transform.position + glm::vec3(move, 0.f);
 		glm::vec3 start_pos = player.transform.position;
-		
+		glm::vec3 end_pos = player.transform.position + glm::vec3(move, 0.f);
+		glm::vec3 dir = glm::vec3(move, 0.f);
+		float dist = PlayerSpeed * elapsed;
+
 		for (Collider *col : colliders) {
-			if (col == &player.col) continue;
-			if (player.col.intersect(*col)) {
-				if (player.col.clip_movement(*col, start_pos, &end_pos) &&
-					(*col).clip_movement(player.col, player.transform.position + glm::vec3(move, 0.f), &start_pos)) {
-					if (glm::length(end_pos - start_pos) >= player.col.size.x) {
-						end_pos = player.transform.position + glm::normalize(end_pos - start_pos) * glm::length(end_pos - start_pos);
-					}
-					else {
-						end_pos = player.transform.position;
-					}
-				}
-				else {
-					end_pos = player.transform.position + glm::vec3(move, 0.f);
-				}
-			}
+			if (col == &player.col || move == glm::vec2(0.f)) continue;
+			player.col.clip_movement(*col, dir, dist);
 		}
 
-		player.transform.position = end_pos;
+		player.transform.position += dir * dist;
 	}
 
 	{ //update listener to camera position:
@@ -273,9 +263,4 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 		}
 	}
 	GL_ERRORS();
-}
-
-glm::vec3 PlayMode::get_leg_tip_position() {
-	//the vertex position here was read from the model in blender:
-	return lower_leg->make_world_from_local() * glm::vec4(-1.26137f, -11.861f, 0.0f, 1.0f);
 }

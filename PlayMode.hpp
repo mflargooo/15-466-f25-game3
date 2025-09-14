@@ -3,6 +3,8 @@
 #include "Scene.hpp"
 #include "Sound.hpp"
 
+#include "Collision.hpp"
+
 #include <glm/glm.hpp>
 
 #include <vector>
@@ -44,8 +46,23 @@ struct PlayMode : Mode {
 
 	//car honk sound:
 	std::shared_ptr< Sound::PlayingSample > honk_oneshot;
+
+	std::vector< Collider * > colliders;
+
+
+	struct Player {
+		Scene::Transform transform;
+		std::vector< Scene::Drawable > drawables;
+
+		Collider col = Collider(&transform);
+
+	} player;
 	
 	//camera:
 	Scene::Camera *camera = nullptr;
+	struct CameraInfo {
+		float yaw = 0.f;
+		float pitch = 0.f;
+	} cam_info;
 
 };

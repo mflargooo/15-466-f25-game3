@@ -8,11 +8,14 @@
 #include "gl_errors.hpp"
 #include "data_path.hpp"
 
+#include "Collision.hpp"
+
 #include <glm/gtc/type_ptr.hpp>
 
 #include <random>
 
 GLuint hexapod_meshes_for_lit_color_texture_program = 0;
+/*	
 Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
 	MeshBuffer const *ret = new MeshBuffer(data_path("hexapod.pnct"));
 	hexapod_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
@@ -22,6 +25,30 @@ Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
 Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
 	return new Scene(data_path("hexapod.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
 		Mesh const &mesh = hexapod_meshes->lookup(mesh_name);
+
+		scene.drawables.emplace_back(transform);
+		Scene::Drawable &drawable = scene.drawables.back();
+
+		drawable.pipeline = lit_color_texture_program_pipeline;
+
+		drawable.pipeline.vao = hexapod_meshes_for_lit_color_texture_program;
+		drawable.pipeline.type = mesh.type;
+		drawable.pipeline.start = mesh.start;
+		drawable.pipeline.count = mesh.count;
+
+	});
+});
+*/
+
+Load< MeshBuffer > test_meshes(LoadTagDefault, []() -> MeshBuffer const * {
+	MeshBuffer const *ret = new MeshBuffer(data_path("test.pnct"));
+	hexapod_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
+	return ret;
+});
+
+Load< Scene > test_scene(LoadTagDefault, []() -> Scene const * {
+	return new Scene(data_path("test.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
+		Mesh const &mesh = test_meshes->lookup(mesh_name);
 
 		scene.drawables.emplace_back(transform);
 		Scene::Drawable &drawable = scene.drawables.back();
@@ -46,28 +73,26 @@ Load< Sound::Sample > honk_sample(LoadTagDefault, []() -> Sound::Sample const * 
 });
 
 
-PlayMode::PlayMode() : scene(*hexapod_scene) {
-	//get pointers to leg for convenience:
-	for (auto &transform : scene.transforms) {
-		if (transform.name == "Hip.FL") hip = &transform;
-		else if (transform.name == "UpperLeg.FL") upper_leg = &transform;
-		else if (transform.name == "LowerLeg.FL") lower_leg = &transform;
-	}
-	if (hip == nullptr) throw std::runtime_error("Hip not found.");
-	if (upper_leg == nullptr) throw std::runtime_error("Upper leg not found.");
-	if (lower_leg == nullptr) throw std::runtime_error("Lower leg not found.");
-
-	hip_base_rotation = hip->rotation;
-	upper_leg_base_rotation = upper_leg->rotation;
-	lower_leg_base_rotation = lower_leg->rotation;
+PlayMode::PlayMode() : scene(*test_scene) {
 
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
 	camera = &scene.cameras.front();
 
+	/*
 	//start music loop playing:
 	// (note: position will be over-ridden in update())
 	leg_tip_loop = Sound::loop_3D(*dusty_floor_sample, 1.0f, get_leg_tip_position(), 10.0f);
+	*/
+	player.transform.position = glm::vec3(-2.f, 0.f, 0.f);
+	camera->transform->parent = &player.transform;
+	camera->transform->position = glm::vec3(0.f, -10.f, 10.f);
+	colliders.emplace_back(&player.col);
+
+	Scene::Transform *transform = new Scene::Transform();
+	colliders.emplace_back(new Collider(transform));
+
+	transform->position = glm::vec3(2.f, 0.f, 0.f);
 }
 
 PlayMode::~PlayMode() {
@@ -124,11 +149,16 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 				evt.motion.xrel / float(window_size.y),
 				-evt.motion.yrel / float(window_size.y)
 			);
-			camera->transform->rotation = glm::normalize(
-				camera->transform->rotation
-				* glm::angleAxis(-motion.x * camera->fovy, glm::vec3(0.0f, 1.0f, 0.0f))
-				* glm::angleAxis(motion.y * camera->fovy, glm::vec3(1.0f, 0.0f, 0.0f))
-			);
+
+			// yaw and pitch to avoid rolling, clamp each
+			cam_info.yaw -= motion.x * camera->fovy;
+			if (cam_info.yaw > (float)M_PI) cam_info.yaw -= (float)M_PI * 2.f;
+			else if (cam_info.yaw < -(float)M_PI) cam_info.yaw += (float)M_PI * 2.f;
+
+			cam_info.pitch += motion.y * camera->fovy;
+			if (cam_info.pitch > (float)M_PI) cam_info.pitch = (float)M_PI;
+			else if (cam_info.pitch < 0.f) cam_info.pitch = 0.f;
+
 			return true;
 		}
 	}
@@ -137,30 +167,14 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void PlayMode::update(float elapsed) {
-
-	//slowly rotates through [0,1):
-	wobble += elapsed / 10.0f;
-	wobble -= std::floor(wobble);
-
-	hip->rotation = hip_base_rotation * glm::angleAxis(
-		glm::radians(5.0f * std::sin(wobble * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 1.0f, 0.0f)
-	);
-	upper_leg->rotation = upper_leg_base_rotation * glm::angleAxis(
-		glm::radians(7.0f * std::sin(wobble * 2.0f * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 0.0f, 1.0f)
-	);
-	lower_leg->rotation = lower_leg_base_rotation * glm::angleAxis(
-		glm::radians(10.0f * std::sin(wobble * 3.0f * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 0.0f, 1.0f)
-	);
-
+	/*
 	//move sound to follow leg tip position:
 	leg_tip_loop->set_position(get_leg_tip_position(), 1.0f / 60.0f);
-
+	*/
 	//move camera:
 	{
-
+		camera->transform->rotation = glm::quat( glm::vec3(cam_info.pitch, 0.0f, cam_info.yaw));
+		
 		//combine inputs into a move:
 		constexpr float PlayerSpeed = 30.0f;
 		glm::vec2 move = glm::vec2(0.0f);
@@ -172,12 +186,24 @@ void PlayMode::update(float elapsed) {
 		//make it so that moving diagonally doesn't go faster:
 		if (move != glm::vec2(0.0f)) move = glm::normalize(move) * PlayerSpeed * elapsed;
 
-		glm::mat4x3 frame = camera->transform->make_parent_from_local();
-		glm::vec3 frame_right = frame[0];
-		//glm::vec3 up = frame[1];
-		glm::vec3 frame_forward = -frame[2];
+		glm::vec3 end_pos = player.transform.position + glm::vec3(move, 0.f);
+		glm::vec3 start_pos = player.transform.position;
+		
+		for (Collider *col : colliders) {
+			if (col == &player.col) continue;
+			if (player.col.intersect(*col)) {
+				std::cout << end_pos.x << ", " << end_pos.y << " " << end_pos.z << std::endl;
+				player.col.clip_movement(*col, start_pos, &end_pos);
+				std::cout << end_pos.x << ", " << end_pos.y << " " << end_pos.z << std::endl;
+				std::cout << start_pos.x << ", " << start_pos.y << " " << start_pos.z << std::endl;
+				if ((*col).clip_movement(player.col, player.transform.position + glm::vec3(move, 0.f), &start_pos)) {
+					end_pos = player.transform.position + glm::normalize(end_pos - start_pos) * glm::length(end_pos - start_pos);
+				}
+				std::cout << start_pos.x << ", " << start_pos.y << " " << start_pos.z << std::endl;
+			}
+		}
 
-		camera->transform->position += move.x * frame_right + move.y * frame_forward;
+		player.transform.position = end_pos;
 	}
 
 	{ //update listener to camera position:
@@ -235,6 +261,12 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 			glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + + 0.1f * H + ofs, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
 			glm::u8vec4(0xff, 0xff, 0xff, 0x00));
+		
+		// world drawing for physics debugging.
+		DrawLines world(glm::mat3x4(camera->make_projection()) * camera->transform->make_local_from_world());
+		for (Collider *col : colliders) {
+			world.draw_box(col->get_transformation_matrix(), glm::u8vec4(255, 0, 0, 255));
+		}
 	}
 	GL_ERRORS();
 }

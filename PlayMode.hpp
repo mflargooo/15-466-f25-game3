@@ -25,16 +25,13 @@ struct PlayMode : Mode {
 	struct Button {
 		uint8_t downs = 0;
 		uint8_t pressed = 0;
-	} left, right, down, up;
+	} left, right, down, up, lshift;
 
 	//local copy of the game scene (so code can change it during gameplay):
 	Scene scene;
 
-	//music coming from the tip of the leg (as a demonstration):
-	std::shared_ptr< Sound::PlayingSample > leg_tip_loop;
-
-	//car honk sound:
-	std::shared_ptr< Sound::PlayingSample > honk_oneshot;
+	// if time allows, potentially maintain structure to register and play sfx
+	// std::map< std::string, std::vector< Sound::Sample *>> sfx;
 
 	std::vector< Collider * > colliders;
 
@@ -50,7 +47,7 @@ struct PlayMode : Mode {
 	Scene::Camera *camera = nullptr;
 	struct CameraInfo {
 		float yaw = 0.f;
-		float pitch = 0.f;
+		float pitch = glm::radians(90.f);
 	} cam_info;
 
 };

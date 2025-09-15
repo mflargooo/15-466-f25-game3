@@ -11,6 +11,11 @@ struct Collider {
     glm::mat4x3 get_transformation_matrix();
 
     Collider(Scene::Transform *obj_transform) : obj_transform(obj_transform) { assert(obj_transform); };
+    Collider(const glm::vec3 &position, const glm::vec3 &scale) : obj_transform(new Scene::Transform()) { 
+        assert(obj_transform); 
+        obj_transform->position = position;
+        obj_transform->scale = scale;
+    };
 
     bool intersect(Collider other);
     // given a start position and end, if movement from "start" to "end" were to cross

@@ -14,6 +14,7 @@ glm::mat4x3 Collider::get_transformation_matrix() {
 }
 
 // https://developer.mozilla.org/en-US/docs/Games/Techniques/3D_collision_detection
+// need to update with local from world transformation into one of the two local spaces
 bool Collider::intersect(Collider other) {
     glm::highp_vec3 min = obj_transform->position + offset - size;
     glm::highp_vec3 max = obj_transform->position + offset + size;
@@ -39,8 +40,6 @@ bool Collider::intersect(Collider other) {
 bool Collider::clip_movement(Collider other, glm::highp_vec3 &dir, float &dist, uint8_t granularity) {
     if (dist == 0.f) return false;
     
-    auto M = glm::mat3x4(other.obj_transform->make_local_from_world()) * obj_transform->make_world_from_local();
-
     // convert world direction and world position to this object space
     glm::highp_vec3 dir_obj_space = other.obj_transform->make_local_from_world() * glm::highp_vec4(dir, 0.f);
 
@@ -107,7 +106,6 @@ bool Collider::clip_movement(Collider other, glm::highp_vec3 &dir, float &dist, 
 
             if (dir_obj_space[i] != 0.f) {
                 // if the direction of movement does hit the face
-
                 tmin = (other_bounds[sign][i] - vertices[j][i]) * invdir[i];
                 tmax = (other_bounds[1 - sign][i] - vertices[j][i]) * invdir[i];
             }

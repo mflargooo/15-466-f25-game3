@@ -9,46 +9,23 @@
 #include "data_path.hpp"
 
 #include "Collision.hpp"
+#include "SoundManager.hpp"
 
 #include <glm/gtc/type_ptr.hpp>
 
 #include <random>
 
 GLuint hexapod_meshes_for_lit_color_texture_program = 0;
-/*	
-Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
-	MeshBuffer const *ret = new MeshBuffer(data_path("hexapod.pnct"));
+
+Load< MeshBuffer > oil_rig_meshes(LoadTagDefault, []() -> MeshBuffer const * {
+	MeshBuffer const *ret = new MeshBuffer(data_path("oil_rig.pnct"));
 	hexapod_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
 	return ret;
 });
 
-Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
-	return new Scene(data_path("hexapod.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
-		Mesh const &mesh = hexapod_meshes->lookup(mesh_name);
-
-		scene.drawables.emplace_back(transform);
-		Scene::Drawable &drawable = scene.drawables.back();
-
-		drawable.pipeline = lit_color_texture_program_pipeline;
-
-		drawable.pipeline.vao = hexapod_meshes_for_lit_color_texture_program;
-		drawable.pipeline.type = mesh.type;
-		drawable.pipeline.start = mesh.start;
-		drawable.pipeline.count = mesh.count;
-
-	});
-});
-*/
-
-Load< MeshBuffer > test_meshes(LoadTagDefault, []() -> MeshBuffer const * {
-	MeshBuffer const *ret = new MeshBuffer(data_path("test.pnct"));
-	hexapod_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
-	return ret;
-});
-
-Load< Scene > test_scene(LoadTagDefault, []() -> Scene const * {
-	return new Scene(data_path("test.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
-		Mesh const &mesh = test_meshes->lookup(mesh_name);
+Load< Scene > oil_rig_scene(LoadTagDefault, []() -> Scene const * {
+	return new Scene(data_path("oil_rig.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
+		Mesh const &mesh = oil_rig_meshes->lookup(mesh_name);
 
 		scene.drawables.emplace_back(transform);
 		Scene::Drawable &drawable = scene.drawables.back();
@@ -63,17 +40,34 @@ Load< Scene > test_scene(LoadTagDefault, []() -> Scene const * {
 	});
 });
 
-Load< Sound::Sample > dusty_floor_sample(LoadTagDefault, []() -> Sound::Sample const * {
-	return new Sound::Sample(data_path("dusty-floor.opus"));
+Load< std::vector< Sound::Sample >> footsteps_samples(LoadTagDefault, []() -> std::vector< Sound::Sample > const * {
+	std::vector< std::string > paths = { 
+		"footsteps-01.wav", "footsteps-02.wav", "footsteps-03.wav",
+		"footsteps-04.wav", "footsteps-05.wav", "footsteps-06.wav" };
+	auto footsteps = new std::vector< Sound::Sample >();
+	footsteps->reserve(paths.size());
+
+	for (size_t i = 0; i < paths.size(); i++) {
+		footsteps->emplace_back(Sound::Sample(data_path(paths[i])));
+	}
+
+	return footsteps;
 });
 
+Load< std::vector< Sound::Sample >> rig_samples(LoadTagDefault, []() -> std::vector< Sound::Sample > const * {
+	std::vector< std::string > paths = { 
+		"falling_metal.wav", "pressure_release-01.wav", "pressure_release-02.wav"};
+	auto rig = new std::vector< Sound::Sample >();
+	rig->reserve(paths.size());
 
-Load< Sound::Sample > honk_sample(LoadTagDefault, []() -> Sound::Sample const * {
-	return new Sound::Sample(data_path("honk.wav"));
+	for (size_t i = 0; i < paths.size(); i++) {
+		rig->emplace_back(Sound::Sample(data_path(paths[i])));
+	}
+
+	return rig;
 });
 
-
-PlayMode::PlayMode() : scene(*test_scene) {
+PlayMode::PlayMode() : scene(*oil_rig_scene) {
 
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
@@ -84,16 +78,17 @@ PlayMode::PlayMode() : scene(*test_scene) {
 	// (note: position will be over-ridden in update())
 	leg_tip_loop = Sound::loop_3D(*dusty_floor_sample, 1.0f, get_leg_tip_position(), 10.0f);
 	*/
-	player.transform.position = glm::vec3(-2.f, 0.f, 0.f);
+	player.transform.position = glm::vec3(0.f, 0.f, 0.f);
 	camera->transform->parent = &player.transform;
-	camera->transform->position = glm::vec3(0.f, -10.f, 10.f);
+	camera->transform->position = glm::vec3(0.f, 0.f, 2.f);
+
 	colliders.emplace_back(&player.col);
 
-	Scene::Transform *transform = new Scene::Transform();
-	colliders.emplace_back(new Collider(transform));
-	colliders.back()->size.y = 10.f;
-
-	transform->position = glm::vec3(2.f, 0.f, 0.f);
+	// setup fence colliders
+	colliders.emplace_back(new Collider(glm::vec3(21.3f, 0.f, 0.f), glm::vec3(.5f, 20.f, 1.f)));
+	colliders.emplace_back(new Collider(glm::vec3(-21.f, 0.f, 0.f), glm::vec3(.5f, 20.f, 1.f)));
+	colliders.emplace_back(new Collider(glm::vec3(0.f, 21.5f, 0.f), glm::vec3(20.f, .5f, 1.f)));
+	colliders.emplace_back(new Collider(glm::vec3(0.f, -21.25f, 0.f), glm::vec3(20.f, .5f, 1.f)));
 }
 
 PlayMode::~PlayMode() {
@@ -121,9 +116,10 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			down.downs += 1;
 			down.pressed = true;
 			return true;
-		} else if (evt.key.key == SDLK_SPACE) {
-			if (honk_oneshot) honk_oneshot->stop();
-			honk_oneshot = Sound::play_3D(*honk_sample, 0.3f, glm::vec3(4.6f, -7.8f, 6.9f)); //hardcoded position of front of car, from blender
+		} else if (evt.key.key == SDLK_LSHIFT) {
+			lshift.downs += 1;
+			lshift.pressed = true;
+			return true;
 		}
 	} else if (evt.type == SDL_EVENT_KEY_UP) {
 		if (evt.key.key == SDLK_A) {
@@ -137,6 +133,9 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			return true;
 		} else if (evt.key.key == SDLK_S) {
 			down.pressed = false;
+			return true;
+		} else if (evt.key.key == SDLK_LSHIFT) {
+			lshift.pressed = false;
 			return true;
 		}
 	} else if (evt.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
@@ -168,36 +167,45 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void PlayMode::update(float elapsed) {
-	/*
-	//move sound to follow leg tip position:
-	leg_tip_loop->set_position(get_leg_tip_position(), 1.0f / 60.0f);
-	*/
+	SoundManager::play_sfx(rig_samples, 45.f, elapsed, 20.f, .5f);
+
 	//move camera:
+	float cos_yaw = std::cosf(cam_info.yaw);
+	float sin_yaw = std::sinf(cam_info.yaw);
+	// float cos_pitch = std::cosf(cam_info.pitch);
+	// float sin_pitch = std::sinf(cam_info.pitch);
 	{
 		camera->transform->rotation = glm::quat( glm::vec3(cam_info.pitch, 0.0f, cam_info.yaw));
-		
+	}
+
+	// handle player movement
+	{
 		//combine inputs into a move:
-		constexpr float PlayerSpeed = 30.0f;
+		constexpr float PlayerSpeed = 5.0f;
 		glm::vec2 move = glm::vec2(0.0f);
 		if (left.pressed && !right.pressed) move.x =-1.0f;
 		if (!left.pressed && right.pressed) move.x = 1.0f;
 		if (down.pressed && !up.pressed) move.y =-1.0f;
 		if (!down.pressed && up.pressed) move.y = 1.0f;
 
-		//make it so that moving diagonally doesn't go faster:
-		if (move != glm::vec2(0.0f)) move = glm::normalize(move) * PlayerSpeed * elapsed;
 
-		glm::vec3 start_pos = player.transform.position;
-		glm::vec3 end_pos = player.transform.position + glm::vec3(move, 0.f);
-		glm::vec3 dir = glm::vec3(move, 0.f);
-		float dist = PlayerSpeed * elapsed;
+		if (move != glm::vec2(0.f)) {
+			//make it so that moving diagonally doesn't go faster:
+			glm::vec3 dir = glm::normalize(glm::vec3(
+				move.x * cos_yaw - move.y * sin_yaw, 
+				move.x * sin_yaw + move.y * cos_yaw, 
+				0.f
+			));
+			float dist = PlayerSpeed * elapsed * (lshift.pressed ? 1.5f : 1.0f);
 
-		for (Collider *col : colliders) {
-			if (col == &player.col || move == glm::vec2(0.f)) continue;
-			player.col.clip_movement(*col, dir, dist);
+			// clip player movement if collision
+			for (Collider *col : colliders) {
+				if (col == &player.col) continue;
+				player.col.clip_movement(*col, dir, dist);
+			}
+			player.transform.position += dir * dist;
+			SoundManager::play_sfx(footsteps_samples, lshift.pressed ? .3f : .4f, elapsed);
 		}
-
-		player.transform.position += dir * dist;
 	}
 
 	{ //update listener to camera position:
@@ -226,7 +234,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 0.95f)));
 	glUseProgram(0);
 
-	glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
+	glClearColor(0.00125f, 0.0f, 0.0025f, 1.0f);
 	glClearDepth(1.0f); //1.0 is actually the default value to clear the depth buffer to, but FYI you can change it.
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

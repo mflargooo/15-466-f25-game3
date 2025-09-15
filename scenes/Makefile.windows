@@ -3,11 +3,11 @@ BLENDER="blender.exe"
 DIST=../dist
 
 all : \
-    $(DIST)/test.pnct \
-    $(DIST)/test.scene \
+    $(DIST)/oil_rig.pnct \
+    $(DIST)/oil_rig.scene \
 
-$(DIST)/test.scene : physics_test.blend export-scene.py
-    $(BLENDER) --background --python export-scene.py -- "physics_test.blend:Main" "$(DIST)/test.scene"
+$(DIST)/oil_rig.scene : oil_rig.blend export-scene.py
+    $(BLENDER) --background --python export-scene.py -- "oil_rig.blend:Main" "$(DIST)/oil_rig.scene"
 
-$(DIST)/test.pnct : physics_test.blend export-meshes.py
-    $(BLENDER) --background --python export-meshes.py -- "physics_test.blend:Main" "$(DIST)/test.pnct" 
+$(DIST)/oil_rig.pnct : oil_rig.blend export-meshes.py
+    $(BLENDER) --background --python export-meshes.py -- "oil_rig.blend:Main" "$(DIST)/oil_rig.pnct" 

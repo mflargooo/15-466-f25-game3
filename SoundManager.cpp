@@ -43,9 +43,9 @@ std::shared_ptr< Sound::PlayingSample > SoundManager::play_sfx_3D(
     const std::vector< Sound::Sample > *samples, 
 	float cooldown, 
 	float elapsed,
-	glm::vec3 &position,
-	float vary, 
+	const glm::vec3 &position,
 	float half_volume_radius,
+	float vary, 
 	float volume
 ) {
 	static std::random_device rd;
@@ -62,7 +62,7 @@ std::shared_ptr< Sound::PlayingSample > SoundManager::play_sfx_3D(
         vary_dists[samples] = vary_dist;
         timers[samples] = cooldown + (vary == 0.f ? 0.f : vary_dists[samples](rng));
     }
-    
+
     if (timers[samples] <= 0.f) {
 		timers[samples] = cooldown + vary_dists[samples](rng);
 		return Sound::play_3D(samples->at(size_dists[samples](rng)), volume, position, half_volume_radius);

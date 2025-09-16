@@ -16,7 +16,7 @@ namespace SoundManager {
         const std::vector< Sound::Sample > *samples, 
         float cooldown, 
         float elapsed,
-        glm::vec3 &position,
+        const glm::vec3 &position,
         float half_volume_radius,
         float vary=(0.F),
         float volume=(1.0F)

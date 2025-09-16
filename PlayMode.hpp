@@ -26,7 +26,7 @@ struct PlayMode : Mode {
 	struct Button {
 		uint8_t downs = 0;
 		uint8_t pressed = 0;
-	} left, right, down, up, lshift, space, interact;
+	} left, right, down, up, lshift, space, interact, q;
 
 	//local copy of the game scene (so code can change it during gameplay):
 	Scene scene;
@@ -45,6 +45,9 @@ struct PlayMode : Mode {
 		float INTERACT_RANGE = 6.f;
 		const float MIN_TO_ENCHANT_STATUS = .25f;
 		bool dead = false;
+		bool win = false;
+
+		bool is_hovering = false;
 
 		void add_enchanted(float delta);
 		float get_enchanted();
@@ -77,9 +80,9 @@ struct PlayMode : Mode {
 		void update(float elapsed);
 
 		private:
-			float MAX_VOLUME = .35f;
+			float MAX_VOLUME = .25f;
 			float ACTIVATE_COOLDOWN = 30.f;
-			float time_until_active = 2000.f;
+			float time_until_active = 10.f;
 	} siren;
 	
 	//camera:

@@ -35,6 +35,7 @@ if (maek.OS === "windows") {
 		`/I${NEST_LIBS}/libopus/include`,
 		`/I${NEST_LIBS}/libogg/include`,
 		//#disable a few warnings:
+		//`/fsanitize=address`,
 		`/wd4146`, //-1U is still unsigned
 		`/wd4297`, //unforunately SDLmain is nothrow
 		`/wd4100`, //unreferenced formal parameter

@@ -28,8 +28,9 @@ std::map< std::string, std::vector< const Mesh * > > hint_meshes;
 Load< Scene > oil_rig_scene(LoadTagDefault, []() -> Scene const * {
 	return new Scene(data_path("oil_rig.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
 		Mesh const &mesh = oil_rig_meshes->lookup(mesh_name);
+		std::cout << mesh_name << std::endl;
 
-		if (mesh_name.find("lever") !=  std::string::npos) {
+		if (mesh_name.find("lever") != std::string::npos) {
 			levers_mesh_transform[mesh_name].first = &mesh;
 			levers_mesh_transform[mesh_name].second = transform;
 		} 
@@ -41,8 +42,9 @@ Load< Scene > oil_rig_scene(LoadTagDefault, []() -> Scene const * {
 			std::string color = mesh_name.substr(5, mesh_name.size() - 7);
 
 			if (hint_meshes.find(color) == hint_meshes.end()) {
-				hint_meshes[color].reserve(5);
+				hint_meshes[color].resize(5);
 			}
+			assert(0 <= idx - 1 && idx - 1 < 5);
 			hint_meshes[color][idx - 1] = &mesh;
 
 		}
@@ -72,6 +74,36 @@ Load< std::vector< Sound::Sample >> footsteps_samples(LoadTagDefault, []() -> st
 	}
 
 	return footsteps;
+});
+
+Load< std::vector< Sound::Sample >> wind_samples(LoadTagDefault, []() -> std::vector< Sound::Sample > const * {
+	std::vector< std::string > paths = { 
+		"wind-01.wav", "wind-02.wav", "wind-03.wav", "wind-04.wav"};
+	auto wind = new std::vector< Sound::Sample >();
+	wind->reserve(paths.size());
+
+	for (size_t i = 0; i < paths.size(); i++) {
+		wind->emplace_back(Sound::Sample(data_path(paths[i])));
+	}
+
+	return wind;
+});
+
+Load< std::vector< Sound::Sample >> water_samples(LoadTagDefault, []() -> std::vector< Sound::Sample > const * {
+	std::vector< std::string > paths = { 
+		"water-01.wav", "water-02.wav", "water-03.wav",
+		"water-04.wav", "water-05.wav", "water-06.wav",
+		"water-07.wav", "water-08.wav", "water-09.wav",
+		"water-10.wav", "water-11.wav", "water-12.wav",
+		"water-13.wav" };
+	auto water = new std::vector< Sound::Sample >();
+	water->reserve(paths.size());
+
+	for (size_t i = 0; i < paths.size(); i++) {
+		water->emplace_back(Sound::Sample(data_path(paths[i])));
+	}
+
+	return water;
 });
 
 Load< std::vector< Sound::Sample >> rig_samples(LoadTagDefault, []() -> std::vector< Sound::Sample > const * {
@@ -173,8 +205,6 @@ void PlayMode::Siren::update(float elapsed) {
 }
 
 PlayMode::PlayMode() : scene(*oil_rig_scene) {
-	assert(hint_drawables.size() == 7);
-	assert(hint_meshes.size() == 5);
 
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
@@ -224,7 +254,7 @@ PlayMode::PlayMode() : scene(*oil_rig_scene) {
 		std::random_device rd;
 		std::mt19937 rng{ rd() };
 		std::uniform_int_distribution< size_t > dist(0, 4);
-		solution.reserve(levers.size());
+		solution.resize(levers.size());
 		for (size_t i = 0; i < levers.size(); i++) {
 			solution[i] = dist(rng);
 		}
@@ -356,6 +386,24 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void PlayMode::update(float elapsed) {
+	if (player.dead) {
+		static bool done_dead = false;
+		if (!done_dead) {
+			Sound::stop_all_samples();
+			std::cout << "You died!" << std::endl;
+			done_dead = true;
+			return;
+		}
+	}
+	else if (player.win) {
+		static bool done_win = false;
+		if(!done_win) {
+			Sound::stop_all_samples();
+			std::cout << "You repaired the oil rig!" << std::endl;
+			done_win = true;
+			return;
+		}
+	}
 	{ //update listener to camera position:
 		glm::mat4x3 frame = camera->transform->make_parent_from_local();
 		glm::vec3 frame_right = frame[0];
@@ -398,7 +446,9 @@ void PlayMode::update(float elapsed) {
 		}
 	}
 
-	glm::vec3 to_siren = glm::normalize(glm::vec3(siren.transform.position - player.transform.position));
+	glm::vec3 diff = glm::vec3(siren.transform.position - player.transform.position);
+	glm::vec3 to_siren = glm::normalize(diff);
+	float mag_to_siren = glm::length(diff);
 	to_siren.z = 0.f;
 	
 	float player_inf = 1.f - player.get_enchanted();
@@ -452,7 +502,10 @@ void PlayMode::update(float elapsed) {
 			// clip movement if collision
 			for (Collider *col : colliders) {
 				if (col == &player.col) continue;
-				if (player.col.clip_movement(*col, to_siren, dist) && glm::length(to_siren) < .01f) {
+				glm::vec3 tmp_siren = to_siren;
+				if (player.col.clip_movement(*col, to_siren, dist) && 
+					mag_to_siren <= 15.f &&
+					((tmp_siren.x - to_siren.x > .75f) || tmp_siren.y - to_siren.y > .75f || tmp_siren.z - to_siren.z > .75f)) {
 					player.dead = true;
 					return;
 				}
@@ -470,7 +523,28 @@ void PlayMode::update(float elapsed) {
 			play_footsteps = true;
 		}
 
-		if (play_footsteps) SoundManager::play_sfx(footsteps_samples, (lshift.pressed ? .3f : .4f), elapsed, 0.f, sound_muffler);
+		if (play_footsteps) SoundManager::play_sfx(footsteps_samples, (lshift.pressed ? .3f : .4f), elapsed, 0.f, .5f * sound_muffler);
+	}
+
+	glm::vec3 forward = glm::vec3(
+		-sin_pitch * sin_yaw,
+		sin_pitch * cos_yaw,
+		-cos_pitch
+	);
+	{ // check if player is hoving for purpose of pop-up
+		for (auto &lever : levers) {
+			glm::vec3 to = (lever.drawable->transform->make_world_from_local() * glm::vec4(lever.drawable->transform->position + lever.offset, 1.f) 
+				- player.transform.make_world_from_local() * glm::vec4(camera->transform->position, 1.f));
+		
+			if (glm::length(to) <= player.INTERACT_RANGE) {
+				float resp = glm::dot(glm::normalize(to), forward);
+				if (resp >= std::cos(lever.interact_angle)) {
+					player.is_hovering = true;
+					break;
+				}
+			}
+			player.is_hovering = false;
+		}
 	}
 
 	// handle interactions
@@ -484,13 +558,7 @@ void PlayMode::update(float elapsed) {
 				glm::vec3 to = (lever.drawable->transform->make_world_from_local() * glm::vec4(lever.drawable->transform->position + lever.offset, 1.f) 
 					- player.transform.make_world_from_local() * glm::vec4(camera->transform->position, 1.f));
 
-					if (glm::length(to) <= player.INTERACT_RANGE) {
-					glm::vec3 forward = glm::vec3(
-						-sin_pitch * sin_yaw,
-						sin_pitch * cos_yaw,
-						-cos_pitch
-					);
-
+				if (glm::length(to) <= player.INTERACT_RANGE) {
 					float resp = glm::dot(glm::normalize(to), forward);
 					if (resp >= std::cos(lever.interact_angle) && resp <= closest_resp) {
 						closest_resp = resp;
@@ -512,9 +580,34 @@ void PlayMode::update(float elapsed) {
 		}
 	}
 
+	// check win
+	{	
+		size_t correct = 0;
+		for (size_t i = 0; i < levers.size(); i++) {
+			correct += solution[i] == levers[i].state ? 1 : 0;
+		}
+
+		player.win = correct == levers.size();
+	}
+
 	// ambient sounds
 	{
-		SoundManager::play_sfx(rig_samples, 45.f, elapsed, 20.f, .5f * sound_muffler);
+		std::random_device rd;
+		std::mt19937 rng { rd() };
+		std::uniform_real_distribution< float > angle_dist(0, (float)M_PI * 2.f);
+		std::uniform_real_distribution< float > radius_dist(0.f, 35.f);
+
+		float angle = angle_dist(rng);
+		float radius = radius_dist(rng);
+		SoundManager::play_sfx_3D(rig_samples, 15.f, elapsed, 7.5f * glm::vec3(std::cosf(angle), radius / 17.5f, std::sinf(angle)), 1000.f, 10.f, .1f * sound_muffler);
+
+		angle = angle_dist(rng);
+		radius = radius_dist(rng);
+		SoundManager::play_sfx_3D(wind_samples, 7.f, elapsed, 35.f * glm::vec3(std::cosf(angle), radius / 35.f * 3.f, std::sinf(angle)), 1000.f, 10.f, .5f * sound_muffler);
+		
+		angle = angle_dist(rng);
+		radius = radius_dist(rng);
+		SoundManager::play_sfx_3D(water_samples, 1.f, elapsed, radius * glm::vec3(std::cosf(angle), -5.f, std::sinf(angle)), 1000.f, 2.f, .1f * sound_muffler);
 	}
 
 	//reset button press counters:
@@ -565,15 +658,27 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
 		float ofs = 2.0f / drawable_size.y;
 		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
-			glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + + 0.1f * H + ofs, 0.0),
+			glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + 0.1f * H + ofs, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
 			glm::u8vec4(0xff, 0xff, 0xff, 0x00));
+
+		// draw crosshair
+		lines.draw_text("HELLO",
+			glm::vec3(-aspect * 2.f, -1.0f, 0.0),
+			glm::vec3(0.f, 0.0f, 0.0f), glm::vec3(0.0f, 0.f, 0.0f),
+			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
+		lines.draw_text("HELLO",
+			glm::vec3(ofs, ofs, 0.0),
+			glm::vec3(0.f, 0.0f, 0.0f), glm::vec3(0.0f, 0.f, 0.0f),
+			glm::u8vec4(0xff, 0xff, 0xff, 0xff));
 		
 		// world drawing for physics debugging.
+		/*
 		DrawLines world(glm::mat3x4(camera->make_projection()) * camera->transform->make_local_from_world());
 		for (Collider *col : colliders) {
 			world.draw_box(col->get_transformation_matrix(), glm::u8vec4(255, 0, 0, 255));
 		}
+		*/
 	}
 	GL_ERRORS();
 }

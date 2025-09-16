@@ -149,7 +149,7 @@ int main(int argc, char **argv) {
 				//handle input:
 				if (Mode::current && Mode::current->handle_event(evt, window_size)) {
 					// mode handled it; great
-				} else if (evt.type == SDL_EVENT_QUIT) {
+				} else if (evt.type == SDL_EVENT_QUIT || (evt.type == SDL_EVENT_KEY_DOWN && evt.key.key == SDLK_Q)) {
 					Mode::set_current(nullptr);
 					break;
 				} else if (evt.type == SDL_EVENT_KEY_DOWN && evt.key.key == SDLK_M) {
@@ -166,6 +166,8 @@ int main(int argc, char **argv) {
 						px.a = 0xff;
 					}
 					save_png(filename, glm::uvec2(w,h), data.data(), LowerLeftOrigin);
+				} else if (evt.type == SDL_EVENT_KEY_DOWN && evt.key.key == SDLK_R) {
+					Mode::set_current(std::make_shared< PlayMode >());
 				}
 			}
 			if (!Mode::current) break;

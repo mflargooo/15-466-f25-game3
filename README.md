@@ -33,7 +33,11 @@ The siren will attempt to lure you in every so often with her song. Spam the spa
 
 <details>
     <summary> Hints </summary>
+
 - Each lever has its own distinct color.
+
 - A lever in the upmost position is in its first state.
+
 </details>
+
 This game was built with [NEST](NEST.md).

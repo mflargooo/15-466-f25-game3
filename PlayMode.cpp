@@ -44,7 +44,6 @@ Load< Scene > oil_rig_scene(LoadTagDefault, []() -> Scene const * {
 			if (hint_meshes.find(color) == hint_meshes.end()) {
 				hint_meshes[color].resize(5);
 			}
-			assert(0 <= idx - 1 && idx - 1 < 5);
 			hint_meshes[color][idx - 1] = &mesh;
 
 		}
@@ -245,8 +244,6 @@ PlayMode::PlayMode() : scene(*oil_rig_scene) {
 			lever->drawable->pipeline.count = pair.first->count; 
 			lever->drawable->pipeline.type = pair.first->type; 
 		}
-
-		assert(levers.size() == 5);
 	}
 
 	// generate solution and populate hints
@@ -556,7 +553,6 @@ void PlayMode::update(float elapsed) {
 			Lever *closest = nullptr;
 			float closest_resp = 100.f;
 			for (auto &lever : levers) {
-				assert(lever.drawable->transform);
 				glm::vec3 to = ((lever.drawable->transform->make_world_from_local() * glm::vec4(lever.drawable->transform->position, 1.f) + lever.offset) 
 					- player.transform.make_world_from_local() * glm::vec4(camera->transform->position, 1.f));
 
@@ -576,7 +572,6 @@ void PlayMode::update(float elapsed) {
 		}
 
 		// update levers
-		assert(levers.size() == 5);
 		for (auto lever : levers) {
 			lever.update(elapsed);
 		}
@@ -631,7 +626,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	glUseProgram(lit_color_texture_program->program);
 	glUniform1i(lit_color_texture_program->LIGHT_TYPE_int, 1);
 	glUniform3fv(lit_color_texture_program->LIGHT_DIRECTION_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f,-1.0f)));
-	glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 0.95f)));
+	glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(.05f, .05f, 0.05f)));
 	glUseProgram(0);
 
 	glClearColor(0.00125f, 0.0f, 0.0025f, 1.0f);

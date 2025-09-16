@@ -42,7 +42,7 @@ struct PlayMode : Mode {
 
 		Collider col = Collider(&transform);
 
-		float INTERACT_RANGE = 6.f;
+		float INTERACT_RANGE = 3.f;
 		const float MIN_TO_ENCHANT_STATUS = .25f;
 		bool dead = false;
 		bool win = false;
@@ -58,7 +58,7 @@ struct PlayMode : Mode {
 
 		private:
 			float enchanted = 0.f;
-			float DISENCHANT_COOLDOWN = 4.0f;
+			float DISENCHANT_COOLDOWN = 3.0f;
 			float time_until_can_disenchant = 0.f;
 
 	} player;
@@ -81,7 +81,7 @@ struct PlayMode : Mode {
 
 		private:
 			float MAX_VOLUME = .25f;
-			float ACTIVATE_COOLDOWN = 30.f;
+			float ACTIVATE_COOLDOWN = 15.f;
 			float time_until_active = 10.f;
 	} siren;
 	

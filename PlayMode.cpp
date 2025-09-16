@@ -333,6 +333,9 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			interact.downs = 1;
 			interact.pressed = true;
 			return true;
+		} else if (evt.key.key == SDLK_R) {
+			Sound::stop_all_samples();
+			return false;
 		}
 	} else if (evt.type == SDL_EVENT_KEY_UP) {
 		if (evt.key.key == SDLK_A) {
@@ -390,20 +393,19 @@ void PlayMode::update(float elapsed) {
 		static bool done_dead = false;
 		if (!done_dead) {
 			Sound::stop_all_samples();
-			std::cout << "You died!" << std::endl;
 			done_dead = true;
-			return;
 		}
+		return;
 	}
 	else if (player.win) {
 		static bool done_win = false;
 		if(!done_win) {
 			Sound::stop_all_samples();
-			std::cout << "You repaired the oil rig!" << std::endl;
 			done_win = true;
-			return;
 		}
+		return;
 	}
+
 	{ //update listener to camera position:
 		glm::mat4x3 frame = camera->transform->make_parent_from_local();
 		glm::vec3 frame_right = frame[0];
@@ -504,7 +506,7 @@ void PlayMode::update(float elapsed) {
 				if (col == &player.col) continue;
 				glm::vec3 tmp_siren = to_siren;
 				if (player.col.clip_movement(*col, to_siren, dist) && 
-					mag_to_siren <= 15.f &&
+					mag_to_siren <= 25.f &&
 					((tmp_siren.x - to_siren.x > .75f) || tmp_siren.y - to_siren.y > .75f || tmp_siren.z - to_siren.z > .75f)) {
 					player.dead = true;
 					return;
@@ -533,7 +535,7 @@ void PlayMode::update(float elapsed) {
 	);
 	{ // check if player is hoving for purpose of pop-up
 		for (auto &lever : levers) {
-			glm::vec3 to = (lever.drawable->transform->make_world_from_local() * glm::vec4(lever.drawable->transform->position + lever.offset, 1.f) 
+			glm::vec3 to = ((lever.drawable->transform->make_world_from_local() * glm::vec4(lever.drawable->transform->position, 1.f) + lever.offset) 
 				- player.transform.make_world_from_local() * glm::vec4(camera->transform->position, 1.f));
 		
 			if (glm::length(to) <= player.INTERACT_RANGE) {
@@ -555,7 +557,7 @@ void PlayMode::update(float elapsed) {
 			float closest_resp = 100.f;
 			for (auto &lever : levers) {
 				assert(lever.drawable->transform);
-				glm::vec3 to = (lever.drawable->transform->make_world_from_local() * glm::vec4(lever.drawable->transform->position + lever.offset, 1.f) 
+				glm::vec3 to = ((lever.drawable->transform->make_world_from_local() * glm::vec4(lever.drawable->transform->position, 1.f) + lever.offset) 
 					- player.transform.make_world_from_local() * glm::vec4(camera->transform->position, 1.f));
 
 				if (glm::length(to) <= player.INTERACT_RANGE) {
@@ -599,11 +601,11 @@ void PlayMode::update(float elapsed) {
 
 		float angle = angle_dist(rng);
 		float radius = radius_dist(rng);
-		SoundManager::play_sfx_3D(rig_samples, 15.f, elapsed, 7.5f * glm::vec3(std::cosf(angle), radius / 17.5f, std::sinf(angle)), 1000.f, 10.f, .1f * sound_muffler);
+		SoundManager::play_sfx_3D(rig_samples, 15.f, elapsed, 7.5f * glm::vec3(std::cosf(angle), radius / 17.5f, std::sinf(angle)), 1000.f, 11.f, .1f * sound_muffler);
 
 		angle = angle_dist(rng);
 		radius = radius_dist(rng);
-		SoundManager::play_sfx_3D(wind_samples, 7.f, elapsed, 35.f * glm::vec3(std::cosf(angle), radius / 35.f * 3.f, std::sinf(angle)), 1000.f, 10.f, .5f * sound_muffler);
+		SoundManager::play_sfx_3D(wind_samples, 12.f, elapsed, 35.f * glm::vec3(std::cosf(angle), radius / 35.f * 3.f, std::sinf(angle)), 1000.f, 10.f, .5f * sound_muffler);
 		
 		angle = angle_dist(rng);
 		radius = radius_dist(rng);
@@ -652,25 +654,112 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 		));
 
 		constexpr float H = 0.09f;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
-			glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
-			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+		lines.draw_text("Find the code for the correct lever configuration to repair the oil rig! Beware of the siren's song!",
+			glm::vec3(-aspect + 0.1f * H, -.98 + 0.1f * H, 0.0),
+			glm::vec3(H * .9f, 0.0f, 0.0f), glm::vec3(0.0f, H  * .9f, 0.0f),
 			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
 		float ofs = 2.0f / drawable_size.y;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
-			glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + 0.1f * H + ofs, 0.0),
-			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+		lines.draw_text("Find the code for the correct lever configuration to repair the oil rig! Beware of the siren's song!",
+			glm::vec3(-aspect + 0.1f * H + ofs, -.98 + 0.1f * H + ofs, 0.0),
+			glm::vec3(H * .9f, 0.0f, 0.0f), glm::vec3(0.0f, H * .9f, 0.0f),
 			glm::u8vec4(0xff, 0xff, 0xff, 0x00));
 
-		// draw crosshair
-		lines.draw_text("HELLO",
-			glm::vec3(-aspect * 2.f, -1.0f, 0.0),
-			glm::vec3(0.f, 0.0f, 0.0f), glm::vec3(0.0f, 0.f, 0.0f),
-			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
-		lines.draw_text("HELLO",
-			glm::vec3(ofs, ofs, 0.0),
-			glm::vec3(0.f, 0.0f, 0.0f), glm::vec3(0.0f, 0.f, 0.0f),
-			glm::u8vec4(0xff, 0xff, 0xff, 0xff));
+		static size_t frame = 0;
+		static bool flip = true;
+		if (frame == 0) {
+			flip = !flip;
+		}
+		frame = (frame + 1) % 15;
+
+		if (player.dead) {
+			lines.draw_text("The Song Claimed You.",
+				glm::vec3(-H * 8.f, 0.f, 0.0),
+				glm::vec3(H * 2.f, 0.0f, 0.0f), glm::vec3(0.0f, H * 2.f, 0.0f),
+				glm::u8vec4(0x00, 0x00, 0x00, 0x00));
+			lines.draw_text("The Song Claimed You.",
+				glm::vec3(ofs - H * 8.f, ofs, 0.0),
+				glm::vec3(H * 2.f, 0.0f, 0.0f), glm::vec3(0.0f, H * 2.f, 0.0f),
+				glm::u8vec4(0xff, 0x00, 0x00, 0xff));
+			lines.draw_text("R - Restart",
+				glm::vec3(-.2, -.2f, 0.0),
+				glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+				glm::u8vec4(0x0, 0x0, 0x0, 0x00));
+			lines.draw_text("R - Restart",
+				glm::vec3(ofs -.2, ofs -.2f, 0.0),
+				glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+				glm::u8vec4(0xff, 0xff, 0xff, 0xff));
+
+			lines.draw_text("Q - Quit",
+				glm::vec3(-.15, -.35, 0.0),
+				glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+				glm::u8vec4(0x0, 0x0, 0x0, 0x00));
+			lines.draw_text("Q - Quit",
+				glm::vec3(ofs -.15, ofs - .35f, 0.0),
+				glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+				glm::u8vec4(0xff, 0xff, 0xff, 0xff));
+
+		} else if (player.win) {
+			lines.draw_text("You Repaired the Oil Rig!",
+				glm::vec3(-H * 9.f, 0.f, 0.0),
+				glm::vec3(H * 2.f, 0.0f, 0.0f), glm::vec3(0.0f, H * 2.f, 0.0f),
+				glm::u8vec4(0x00, 0x00, 0x00, 0x00));
+			lines.draw_text("You Repaired the Oil Rig!",
+				glm::vec3(ofs - H * 9.f, ofs, 0.0),
+				glm::vec3(H * 2.f, 0.0f, 0.0f), glm::vec3(0.0f, H * 2.f, 0.0f),
+				glm::u8vec4(0x00, 0xff, 0xff, 0xff));
+			lines.draw_text("R - Play Again",
+				glm::vec3(-.2, -.2f, 0.0),
+				glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+				glm::u8vec4(0x0, 0x0, 0x0, 0x00));
+			lines.draw_text("R - Play Again",
+				glm::vec3(ofs -.2, ofs -.2f, 0.0),
+				glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+				glm::u8vec4(0xff, 0xff, 0xff, 0x00));
+
+			lines.draw_text("Q - Quit",
+				glm::vec3(-.15, -.35, 0.0),
+				glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+				glm::u8vec4(0x0, 0x0, 0x0, 0x00));
+			lines.draw_text("Q - Quit",
+				glm::vec3(ofs -.15, ofs - .35f, 0.0),
+				glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+				glm::u8vec4(0xff, 0xff, 0xff, 0x00));
+
+		}
+		else if (siren.active && player.get_disenchanted_timer() <= 0.f) {
+			if (flip) {
+				lines.draw_text("SPACE",
+					glm::vec3(-H, 0.f, 0.0),
+					glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+					glm::u8vec4(0x00, 0x00, 0x00, 0x00));
+				lines.draw_text("SPACE",
+					glm::vec3(ofs - H, ofs, 0.0),
+					glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+					glm::u8vec4(0xff, 0xff, 0xff, 0x00));
+			}
+		}
+		else if (player.get_enchanted() < player.MIN_TO_ENCHANT_STATUS)  {
+			// draw crosshair
+			constexpr float Cursor_size = .15f;
+			lines.draw_text(".",
+				glm::vec3(0.f, 0.f, 0.0),
+				glm::vec3(Cursor_size, 0.0f, 0.0f), glm::vec3(0.0f, Cursor_size, 0.0f),
+				glm::u8vec4(0x00, 0x00, 0x00, 0x00));
+			lines.draw_text(".",
+				glm::vec3(0.f, 0.f, 0.0),
+				glm::vec3(Cursor_size, 0.0f, 0.0f), glm::vec3(0.0f, Cursor_size, 0.0f),
+				glm::u8vec4(0xff, 0xff, 0xff, 0xff));
+			if (player.is_hovering) {
+				lines.draw_text("F - interact", 
+					glm::vec3(-H, -.9f * H, 0.0),
+					glm::vec3(H * .625f, 0.0f, 0.0f), glm::vec3(0.0f, H * .625f, 0.0f),
+					glm::u8vec4(0x00, 0x00, 0x00, 0x00));
+				lines.draw_text("F - interact",
+					glm::vec3(ofs - H, -.9f * H + ofs, 0.0),
+					glm::vec3(H * .625f, 0.0f, 0.0f), glm::vec3(0.0f, H * .625, 0.0f),
+					glm::u8vec4(0xff, 0xff, 0xff, 0xff));
+			}
+		}
 		
 		// world drawing for physics debugging.
 		/*

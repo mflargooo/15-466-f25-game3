@@ -5,9 +5,9 @@
 
 struct Interactable {
     Scene::Drawable *drawable;   
-    glm::vec3 offset = glm::vec3(0.f, 0.f, 1.f);
+    glm::vec3 offset = glm::vec3(0.f, 0.f, -.25f);
 
-    float interact_angle = glm::radians(12.5f);
+    float interact_angle = glm::radians(10.f);
     virtual void interact() {
         std::cout << "Interaction not yet implemented!" << std::endl;
     };

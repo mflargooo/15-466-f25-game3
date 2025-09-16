@@ -5,6 +5,7 @@
 #include <map>
 #include <iostream>
 
+// this whole setup is disgusting...
 std::shared_ptr< Sound::PlayingSample > SoundManager::play_sfx(
     const std::vector< Sound::Sample > *samples, 
 	float cooldown, 

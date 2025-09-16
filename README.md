@@ -14,6 +14,8 @@ WASD - Move
 
 Mouse motion - Look around
 
+L-Shift - Sprint
+
 F - Interact
 
 Q - Quit the game

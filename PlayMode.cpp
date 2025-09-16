@@ -290,6 +290,9 @@ PlayMode::PlayMode() : scene(*oil_rig_scene) {
 		
 		// terminal
 		colliders.emplace_back(new Collider(glm::vec3(0.f, -6.5f, 0.f), glm::vec3(4.5f, 1.f, 1.f)));
+		
+		// boxes
+		colliders.emplace_back(new Collider(glm::vec3(-1.5f, -8.5, 0.f), glm::vec3(3.5f, 1.f, 1.f)));
 	}
 }
 
@@ -660,11 +663,11 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 			glm::u8vec4(0xff, 0xff, 0xff, 0x00));
 
 		static size_t frame = 0;
-		static bool flip = true;
+		static bool flip = false;
 		if (frame == 0) {
 			flip = !flip;
 		}
-		frame = (frame + 1) % 15;
+		frame = (frame + 1) % 10;
 
 		if (player.dead) {
 			lines.draw_text("The Song Claimed You.",
@@ -757,12 +760,10 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 		}
 		
 		// world drawing for physics debugging.
-		/*
 		DrawLines world(glm::mat3x4(camera->make_projection()) * camera->transform->make_local_from_world());
 		for (Collider *col : colliders) {
 			world.draw_box(col->get_transformation_matrix(), glm::u8vec4(255, 0, 0, 255));
 		}
-		*/
 	}
 	GL_ERRORS();
 }

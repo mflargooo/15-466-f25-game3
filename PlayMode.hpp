@@ -25,7 +25,7 @@ struct PlayMode : Mode {
 	struct Button {
 		uint8_t downs = 0;
 		uint8_t pressed = 0;
-	} left, right, down, up, lshift;
+	} left, right, down, up, lshift, space;
 
 	//local copy of the game scene (so code can change it during gameplay):
 	Scene scene;
@@ -41,7 +41,42 @@ struct PlayMode : Mode {
 
 		Collider col = Collider(&transform);
 
+		const float MIN_TO_ENCHANT_STATUS = .25f;
+		void add_enchanted(float delta);
+		float get_enchanted();
+
+		void reset_disenchanted_timer();
+		float get_disenchanted_timer();
+		void update(float elapsed);
+
+		private:
+			float enchanted = 0.f;
+			float DISENCHANT_COOLDOWN = 4.0f;
+			float time_until_can_disenchant = 0.f;
+
 	} player;
+
+	struct Siren {
+		Scene::Transform transform;
+		std::shared_ptr< Sound::PlayingSample > screech;
+		std::shared_ptr< Sound::PlayingSample > song;
+		bool active = false;
+
+		// for debug purposes
+		Collider col = Collider(&transform);
+
+
+		void set_volume(float enchantedness);
+		void reposition_relative_to(glm::vec3 position, float radius);
+		void activate();
+		void deactivate();
+		void update(float elapsed);
+
+		private:
+			float MAX_VOLUME = .35f;
+			float ACTIVATE_COOLDOWN = 30.f;
+			float time_until_active = 10.f;
+	} siren;
 	
 	//camera:
 	Scene::Camera *camera = nullptr;
@@ -50,4 +85,6 @@ struct PlayMode : Mode {
 		float pitch = glm::radians(90.f);
 	} cam_info;
 
+	private:
+		float MIN_MUFFLED_SOUND_COEFF = .2f;
 };

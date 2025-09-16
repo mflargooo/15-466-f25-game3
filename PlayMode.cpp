@@ -67,6 +67,92 @@ Load< std::vector< Sound::Sample >> rig_samples(LoadTagDefault, []() -> std::vec
 	return rig;
 });
 
+Load< std::vector< Sound::Sample >> siren_samples(LoadTagDefault, []() -> std::vector< Sound::Sample > const * {
+	std::vector< std::string > paths = { 
+		"siren_screech_loop.wav", "siren_song_loop.wav"};
+	auto siren = new std::vector< Sound::Sample >();
+	siren->reserve(paths.size());
+
+	for (size_t i = 0; i < paths.size(); i++) {
+		siren->emplace_back(Sound::Sample(data_path(paths[i])));
+	}
+
+	return siren;
+});
+
+void PlayMode::Player::update(float elapsed) {
+	std::cout << "D: " << time_until_can_disenchant << "\tE: " << enchanted << std::endl;
+	if (time_until_can_disenchant > 0.f) time_until_can_disenchant -= elapsed;
+}
+
+void PlayMode::Player::add_enchanted(float delta) {
+	enchanted = std::max(0.f, std::min(enchanted + delta, 1.f));
+}
+
+float PlayMode::Player::get_enchanted() {
+	return enchanted;
+}
+
+void PlayMode::Player::reset_disenchanted_timer() {
+	time_until_can_disenchant = DISENCHANT_COOLDOWN;
+}
+
+float PlayMode::Player::get_disenchanted_timer() {
+	return time_until_can_disenchant;
+}
+
+void PlayMode::Siren::set_volume(float enchantedness) {
+	if (!active) return;
+
+	enchantedness = std::max(0.f, std::min(enchantedness, 1.f));
+
+	screech->set_volume(MAX_VOLUME * (1.f - enchantedness));
+	song->set_volume(MAX_VOLUME * enchantedness);
+}
+
+void PlayMode::Siren::activate() {
+	active = time_until_active <= 0.f;
+}
+
+void PlayMode::Siren::deactivate() {
+	static std::random_device rd;
+	static std::mt19937 rng { rd() };
+	static std::uniform_real_distribution< float > dist(-1.f, 1.f);
+
+	time_until_active = ACTIVATE_COOLDOWN + dist(rng);
+
+	screech->set_volume(0.f);
+	song->set_volume(0.f);
+	
+	active = false;
+}
+
+void PlayMode::Siren::reposition_relative_to(glm::vec3 position, float radius) {
+	// assumes oil rig is centered at 0, 0, 0
+	glm::vec3 dir;
+	if (position.x == 0.f && position.y == 0.f) {
+
+		std::random_device rd;
+		std::mt19937 rng { rd() };
+		std::uniform_real_distribution< float > dist(0, glm::radians(359.9f));
+		float angle = dist(rng);
+		dir = glm::vec3(std::cosf(angle), std::sinf(angle), 0.f);
+	}
+	else {
+		dir = glm::normalize(position);
+	}
+	transform.position = dir * radius + glm::vec3(0.f, 0.f, position.z);
+
+	// potentially use set_position, but it should not be the case that it
+	// will be repositioned while volume > 0
+	screech->position = transform.position - glm::vec3(0.f, 5.f, 0.f);
+	song->position = transform.position - glm::vec3(0.f, 5.f, 0.f);
+}
+
+void PlayMode::Siren::update(float elapsed) {
+	if (time_until_active > 0.f) time_until_active -= elapsed;
+}
+
 PlayMode::PlayMode() : scene(*oil_rig_scene) {
 
 	//get pointer to camera for convenience:
@@ -82,7 +168,14 @@ PlayMode::PlayMode() : scene(*oil_rig_scene) {
 	camera->transform->parent = &player.transform;
 	camera->transform->position = glm::vec3(0.f, 0.f, 2.f);
 
+	// keep siren at head level
+	siren.transform.position = glm::vec3(0.f, 0.f, 2.f);
+	siren.screech = Sound::loop_3D(siren_samples->at(0), 0.f, siren.transform.position - glm::vec3(0.f, 5.f, 0.f));
+	siren.song = Sound::loop_3D(siren_samples->at(1), 0.f, siren.transform.position - glm::vec3(0.f, 5.f, 0.f));
+	siren.reposition_relative_to(glm::vec3(0.f, 0.f, 2.f), 35);
+
 	colliders.emplace_back(&player.col);
+	colliders.emplace_back(&siren.col);
 
 	// setup fence colliders
 	colliders.emplace_back(new Collider(glm::vec3(21.3f, 0.f, 0.f), glm::vec3(.5f, 20.f, 1.f)));
@@ -120,6 +213,10 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			lshift.downs += 1;
 			lshift.pressed = true;
 			return true;
+		} else if (evt.key.key == SDLK_SPACE) {
+			space.downs = 1;
+			space.pressed = true;
+			return true;
 		}
 	} else if (evt.type == SDL_EVENT_KEY_UP) {
 		if (evt.key.key == SDLK_A) {
@@ -136,6 +233,9 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			return true;
 		} else if (evt.key.key == SDLK_LSHIFT) {
 			lshift.pressed = false;
+			return true;
+		} else if (evt.key.key == SDLK_SPACE) {
+			space.pressed = false;
 			return true;
 		}
 	} else if (evt.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
@@ -167,46 +267,7 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void PlayMode::update(float elapsed) {
-	SoundManager::play_sfx(rig_samples, 45.f, elapsed, 20.f, .5f);
-
-	//move camera:
-	float cos_yaw = std::cosf(cam_info.yaw);
-	float sin_yaw = std::sinf(cam_info.yaw);
-	// float cos_pitch = std::cosf(cam_info.pitch);
-	// float sin_pitch = std::sinf(cam_info.pitch);
-	{
-		camera->transform->rotation = glm::quat( glm::vec3(cam_info.pitch, 0.0f, cam_info.yaw));
-	}
-
-	// handle player movement
-	{
-		//combine inputs into a move:
-		constexpr float PlayerSpeed = 5.0f;
-		glm::vec2 move = glm::vec2(0.0f);
-		if (left.pressed && !right.pressed) move.x =-1.0f;
-		if (!left.pressed && right.pressed) move.x = 1.0f;
-		if (down.pressed && !up.pressed) move.y =-1.0f;
-		if (!down.pressed && up.pressed) move.y = 1.0f;
-
-
-		if (move != glm::vec2(0.f)) {
-			//make it so that moving diagonally doesn't go faster:
-			glm::vec3 dir = glm::normalize(glm::vec3(
-				move.x * cos_yaw - move.y * sin_yaw, 
-				move.x * sin_yaw + move.y * cos_yaw, 
-				0.f
-			));
-			float dist = PlayerSpeed * elapsed * (lshift.pressed ? 1.5f : 1.0f);
-
-			// clip player movement if collision
-			for (Collider *col : colliders) {
-				if (col == &player.col) continue;
-				player.col.clip_movement(*col, dir, dist);
-			}
-			player.transform.position += dir * dist;
-			SoundManager::play_sfx(footsteps_samples, lshift.pressed ? .3f : .4f, elapsed);
-		}
-	}
+	// play ambient rig noises
 
 	{ //update listener to camera position:
 		glm::mat4x3 frame = camera->transform->make_parent_from_local();
@@ -215,11 +276,114 @@ void PlayMode::update(float elapsed) {
 		Sound::listener.set_position_right(frame_at, frame_right, 1.0f / 60.0f);
 	}
 
+	// handle siren activation and player-siren interaction
+	{
+		// only allow siren to enchant player every couple of frames so that player
+		// can spam to disenchant self
+		static size_t frame = 0;
+		if (!siren.active) {
+			siren.update(elapsed);
+			siren.activate();
+		}
+		else {
+			// update necessary timers
+			player.update(elapsed);
+			
+			float delta = player.get_disenchanted_timer() > 0.f ? (frame == 0 ? .2f : 0.f) :
+				space.pressed ? -.75f : (frame == 0 ? .2f : 0.f);
+			player.add_enchanted(elapsed * delta);
+			siren.set_volume(player.get_enchanted());
+			frame = (frame + 1) % 1;
+
+			// after recovering from being enchanted, within .1
+			if (player.get_enchanted() <= .05f && player.get_disenchanted_timer() <= 0.f) {
+				siren.deactivate();
+				player.reset_disenchanted_timer();
+				siren.reposition_relative_to(player.transform.position, 35);
+			}
+		}
+	}
+
+	glm::vec3 to_siren = glm::normalize(glm::vec3(siren.transform.position - player.transform.position));
+	to_siren.z = 0.f;
+	
+	float player_inf = 1.f - player.get_enchanted();
+	float siren_inf = player.get_enchanted();
+	float sound_muffler = std::max(player_inf, MIN_MUFFLED_SOUND_COEFF);
+
+	//move camera:
+	float cos_yaw = std::cosf(cam_info.yaw);
+	float sin_yaw = std::sinf(cam_info.yaw);
+	// float cos_pitch = std::cosf(cam_info.pitch);
+	// float sin_pitch = std::sinf(cam_info.pitch);
+	{	
+		float yaw_to_siren = std::atan2(-to_siren.x, to_siren.y);
+		float pitch_to_siren = glm::radians(90.f);
+
+		if (player.get_enchanted() >= player.MIN_TO_ENCHANT_STATUS) {
+			float siren_cam_inf = std::min(siren_inf, .9f);
+			cam_info.yaw = cam_info.yaw * (1.f - siren_cam_inf * siren_cam_inf) + yaw_to_siren * siren_cam_inf * siren_cam_inf;
+			cam_info.pitch = cam_info.pitch * (1.f - siren_cam_inf * siren_cam_inf) + pitch_to_siren * siren_cam_inf * siren_cam_inf;
+		}
+
+		camera->transform->rotation = glm::quat( glm::vec3(cam_info.pitch, 0.0f, cam_info.yaw) );
+	}
+
+	// handle player movement
+	// player's ability to control movement is impaired by siren
+	{
+		//combine inputs into a move:
+		constexpr float PlayerSpeed = 5.0f;
+		glm::vec2 move = glm::vec2(0.0f);
+		glm::vec3 player_dir = glm::vec3(0.f);
+
+		if (left.pressed && !right.pressed) move.x =-1.0f;
+		if (!left.pressed && right.pressed) move.x = 1.0f;
+		if (down.pressed && !up.pressed) move.y =-1.0f;
+		if (!down.pressed && up.pressed) move.y = 1.0f;
+		float dist = PlayerSpeed * elapsed * (lshift.pressed ? 1.5f : 1.0f);
+
+		if (move != glm::vec2(0.f)) {
+			//make it so that moving diagonally doesn't go faster:
+			player_dir = glm::normalize(glm::vec3(
+				move.x * cos_yaw - move.y * sin_yaw, 
+				move.x * sin_yaw + move.y * cos_yaw, 
+				0.f
+			));
+		}
+
+		// add influence from siren
+
+		bool play_footsteps = false;
+		if (siren.active && to_siren != glm::vec3(0.f) && player.get_enchanted() > .05f) {
+			player.transform.position += to_siren * dist * player.get_enchanted() * .5f;
+			play_footsteps = true;
+		}
+		if (player_dir != glm::vec3(0.f) && player.get_enchanted() < player.MIN_TO_ENCHANT_STATUS) {
+			// clip player movement if collision
+			for (Collider *col : colliders) {
+				if (col == &player.col) continue;
+				player.col.clip_movement(*col, player_dir, dist);
+			}
+			player.transform.position += player_dir * dist * player_inf;
+			play_footsteps = true;
+		}
+
+		if (play_footsteps) SoundManager::play_sfx(footsteps_samples, (lshift.pressed ? .3f : .4f), elapsed, 0.f, sound_muffler);
+	}
+
+	// ambient sounds
+	{
+		SoundManager::play_sfx(rig_samples, 45.f, elapsed, 20.f, .5f * sound_muffler);
+	}
+
 	//reset button press counters:
 	left.downs = 0;
 	right.downs = 0;
 	up.downs = 0;
 	down.downs = 0;
+	lshift.downs = 0;
+	space.downs = 0;
 }
 
 void PlayMode::draw(glm::uvec2 const &drawable_size) {

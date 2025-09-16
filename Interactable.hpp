@@ -4,17 +4,20 @@
 #include <iostream>
 
 struct Interactable {
-    // update to use collider system if time allows
-    float radius;
-    Scene::Transform transform;   
+    Scene::Drawable *drawable;   
+    glm::vec3 offset = glm::vec3(0.f, 0.f, 1.f);
+
+    float interact_angle = glm::radians(12.5f);
     virtual void interact() {
         std::cout << "Interaction not yet implemented!" << std::endl;
-    }
+    };
+    virtual void update(float elapsed) {
+        std::cout << "Update not yet implemented!" << std::endl;
+     };
 };
 
 struct Lever : Interactable {
-    uint8_t state = 0;
-};
-struct Pipe : Interactable {
-    uint8_t state = 0;
+    size_t state = 0;
+    void interact() override;
+    void update(float elapsed) override;
 };

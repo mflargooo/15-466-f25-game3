@@ -8,7 +8,6 @@
 #include "gl_errors.hpp"
 #include "data_path.hpp"
 
-#include "Collision.hpp"
 #include "SoundManager.hpp"
 
 #include <glm/gtc/type_ptr.hpp>
@@ -23,20 +22,41 @@ Load< MeshBuffer > oil_rig_meshes(LoadTagDefault, []() -> MeshBuffer const * {
 	return ret;
 });
 
+std::map< std::string, std::pair < const Mesh *, Scene::Transform * >> levers_mesh_transform;
+std::vector< Scene::Drawable > hint_drawables;
+std::map< std::string, std::vector< const Mesh * > > hint_meshes;
 Load< Scene > oil_rig_scene(LoadTagDefault, []() -> Scene const * {
 	return new Scene(data_path("oil_rig.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
 		Mesh const &mesh = oil_rig_meshes->lookup(mesh_name);
 
-		scene.drawables.emplace_back(transform);
-		Scene::Drawable &drawable = scene.drawables.back();
+		if (mesh_name.find("lever") !=  std::string::npos) {
+			levers_mesh_transform[mesh_name].first = &mesh;
+			levers_mesh_transform[mesh_name].second = transform;
+		} 
+		else if (mesh_name.find("hintloc") != std::string::npos) {
+			hint_drawables.emplace_back(transform);
+		}
+		else if (mesh_name.find("card") != std::string::npos) {
+			size_t idx = std::stoull(mesh_name.substr(mesh_name.size() - 1, 1));
+			std::string color = mesh_name.substr(5, mesh_name.size() - 7);
 
-		drawable.pipeline = lit_color_texture_program_pipeline;
+			if (hint_meshes.find(color) == hint_meshes.end()) {
+				hint_meshes[color].reserve(5);
+			}
+			hint_meshes[color][idx - 1] = &mesh;
 
-		drawable.pipeline.vao = hexapod_meshes_for_lit_color_texture_program;
-		drawable.pipeline.type = mesh.type;
-		drawable.pipeline.start = mesh.start;
-		drawable.pipeline.count = mesh.count;
+		}
+		else {
+			scene.drawables.emplace_back(transform);
+			Scene::Drawable &drawable = scene.drawables.back();
 
+			drawable.pipeline = lit_color_texture_program_pipeline;
+
+			drawable.pipeline.vao = hexapod_meshes_for_lit_color_texture_program;
+			drawable.pipeline.type = mesh.type;
+			drawable.pipeline.start = mesh.start;
+			drawable.pipeline.count = mesh.count;
+		}
 	});
 });
 
@@ -81,7 +101,6 @@ Load< std::vector< Sound::Sample >> siren_samples(LoadTagDefault, []() -> std::v
 });
 
 void PlayMode::Player::update(float elapsed) {
-	std::cout << "D: " << time_until_can_disenchant << "\tE: " << enchanted << std::endl;
 	if (time_until_can_disenchant > 0.f) time_until_can_disenchant -= elapsed;
 }
 
@@ -154,34 +173,97 @@ void PlayMode::Siren::update(float elapsed) {
 }
 
 PlayMode::PlayMode() : scene(*oil_rig_scene) {
+	assert(hint_drawables.size() == 7);
+	assert(hint_meshes.size() == 5);
 
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
 	camera = &scene.cameras.front();
 
-	/*
-	//start music loop playing:
-	// (note: position will be over-ridden in update())
-	leg_tip_loop = Sound::loop_3D(*dusty_floor_sample, 1.0f, get_leg_tip_position(), 10.0f);
-	*/
-	player.transform.position = glm::vec3(0.f, 0.f, 0.f);
-	camera->transform->parent = &player.transform;
-	camera->transform->position = glm::vec3(0.f, 0.f, 2.f);
+	{
+		player.transform.position = glm::vec3(0.f, 0.f, 0.f);
+		camera->transform->parent = &player.transform;
+		camera->transform->position = glm::vec3(0.f, 0.f, 2.f);
 
-	// keep siren at head level
-	siren.transform.position = glm::vec3(0.f, 0.f, 2.f);
-	siren.screech = Sound::loop_3D(siren_samples->at(0), 0.f, siren.transform.position - glm::vec3(0.f, 5.f, 0.f));
-	siren.song = Sound::loop_3D(siren_samples->at(1), 0.f, siren.transform.position - glm::vec3(0.f, 5.f, 0.f));
-	siren.reposition_relative_to(glm::vec3(0.f, 0.f, 2.f), 35);
+		player.reset_disenchanted_timer();
+		}
+	{
+		// keep siren at player head level
+		siren.transform.position = glm::vec3(0.f, 0.f, 2.f);
+		siren.screech = Sound::loop_3D(siren_samples->at(0), 0.f, siren.transform.position - glm::vec3(0.f, 5.f, 0.f));
+		siren.song = Sound::loop_3D(siren_samples->at(1), 0.f, siren.transform.position - glm::vec3(0.f, 5.f, 0.f));
+		siren.reposition_relative_to(glm::vec3(0.f, 0.f, 2.f), 35);
+	}
 
-	colliders.emplace_back(&player.col);
-	colliders.emplace_back(&siren.col);
 
-	// setup fence colliders
-	colliders.emplace_back(new Collider(glm::vec3(21.3f, 0.f, 0.f), glm::vec3(.5f, 20.f, 1.f)));
-	colliders.emplace_back(new Collider(glm::vec3(-21.f, 0.f, 0.f), glm::vec3(.5f, 20.f, 1.f)));
-	colliders.emplace_back(new Collider(glm::vec3(0.f, 21.5f, 0.f), glm::vec3(20.f, .5f, 1.f)));
-	colliders.emplace_back(new Collider(glm::vec3(0.f, -21.25f, 0.f), glm::vec3(20.f, .5f, 1.f)));
+	// setup levers
+	{
+		for (size_t i = 0; i < 5; i++) {
+			auto pair = levers_mesh_transform["lever.00" + std::to_string(i + 1)];
+			
+			scene.drawables.emplace_back(new Scene::Transform());
+			levers.emplace_back();
+			auto *lever = &levers.back();
+
+			lever->drawable = &scene.drawables.back();
+
+			*(lever->drawable->transform) = *(pair.second);
+			lever->drawable->pipeline = lit_color_texture_program_pipeline;
+
+			lever->drawable->pipeline.vao = hexapod_meshes_for_lit_color_texture_program;
+			lever->drawable->pipeline.start = pair.first->start; 
+			lever->drawable->pipeline.count = pair.first->count; 
+			lever->drawable->pipeline.type = pair.first->type; 
+		}
+
+		assert(levers.size() == 5);
+	}
+
+	// generate solution and populate hints
+	{
+		std::random_device rd;
+		std::mt19937 rng{ rd() };
+		std::uniform_int_distribution< size_t > dist(0, 4);
+		solution.reserve(levers.size());
+		for (size_t i = 0; i < levers.size(); i++) {
+			solution[i] = dist(rng);
+		}
+
+		std::vector< std::string > colors = { "red", "green", "blue", "orange", "purple" };
+		std::shuffle(hint_drawables.begin(), hint_drawables.end(), rng);
+		for (size_t i = 0; i < levers.size(); i++) {
+			hint_drawables[i].pipeline = lit_color_texture_program_pipeline;
+			hint_drawables[i].pipeline.vao = hexapod_meshes_for_lit_color_texture_program;
+			hint_drawables[i].pipeline.start = hint_meshes[colors[i]][solution[i]]->start;
+			hint_drawables[i].pipeline.count = hint_meshes[colors[i]][solution[i]]->count;
+			hint_drawables[i].pipeline.type = hint_meshes[colors[i]][solution[i]]->type;
+
+			scene.drawables.emplace_back(hint_drawables[i]);
+		}
+	}
+	
+
+	// add colliders
+	{
+		colliders.emplace_back(&player.col);
+		// colliders.emplace_back(&siren.col);
+
+		// setup fence colliders
+		colliders.emplace_back(new Collider(glm::vec3(21.3f, 0.f, 0.f), glm::vec3(.5f, 20.f, 1.f)));
+		colliders.emplace_back(new Collider(glm::vec3(-21.f, 0.f, 0.f), glm::vec3(.5f, 20.f, 1.f)));
+		colliders.emplace_back(new Collider(glm::vec3(0.f, 21.5f, 0.f), glm::vec3(20.f, .5f, 1.f)));
+		colliders.emplace_back(new Collider(glm::vec3(0.f, -21.25f, 0.f), glm::vec3(20.f, .5f, 1.f)));
+
+		// setup building colliders
+		colliders.emplace_back(new Collider(glm::vec3(3.7f * 2.f, 0.f, 0.f), glm::vec3(.1f, 7.5f, 1.f)));
+		colliders.emplace_back(new Collider(glm::vec3(-3.7f * 2.f, 0.f, 0.f), glm::vec3(.1f, 7.5f, 1.f)));
+		colliders.emplace_back(new Collider(glm::vec3(-6.3f, 3.7f * 2.f, 0.f), glm::vec3(1.2f, .1f, 1.f)));
+		colliders.emplace_back(new Collider(glm::vec3(3.75f, 3.7f * 2.f, 0.f), glm::vec3(3.75f, .1f, 1.f)));
+		colliders.emplace_back(new Collider(glm::vec3(0.f, -3.7f * 2.f, 0.f), glm::vec3(7.5f, .1f, 1.f)));
+		
+		// terminal
+		colliders.emplace_back(new Collider(glm::vec3(0.f, -6.5f, 0.f), glm::vec3(4.5f, 1.f, 1.f)));
+	}
 }
 
 PlayMode::~PlayMode() {
@@ -217,6 +299,10 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			space.downs = 1;
 			space.pressed = true;
 			return true;
+		} else if (evt.key.key == SDLK_F) {
+			interact.downs = 1;
+			interact.pressed = true;
+			return true;
 		}
 	} else if (evt.type == SDL_EVENT_KEY_UP) {
 		if (evt.key.key == SDLK_A) {
@@ -236,6 +322,9 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			return true;
 		} else if (evt.key.key == SDLK_SPACE) {
 			space.pressed = false;
+			return true;
+		} else if (evt.key.key == SDLK_F) {
+			interact.pressed = false;
 			return true;
 		}
 	} else if (evt.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
@@ -267,8 +356,6 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void PlayMode::update(float elapsed) {
-	// play ambient rig noises
-
 	{ //update listener to camera position:
 		glm::mat4x3 frame = camera->transform->make_parent_from_local();
 		glm::vec3 frame_right = frame[0];
@@ -281,11 +368,18 @@ void PlayMode::update(float elapsed) {
 		// only allow siren to enchant player every couple of frames so that player
 		// can spam to disenchant self
 		static size_t frame = 0;
+		bool reposition = false;
 		if (!siren.active) {
 			siren.update(elapsed);
 			siren.activate();
+			reposition = false;
 		}
 		else {
+			if (!reposition) {
+				siren.reposition_relative_to(player.transform.position, 35);
+				reposition = true;
+			}
+
 			// update necessary timers
 			player.update(elapsed);
 			
@@ -299,7 +393,7 @@ void PlayMode::update(float elapsed) {
 			if (player.get_enchanted() <= .05f && player.get_disenchanted_timer() <= 0.f) {
 				siren.deactivate();
 				player.reset_disenchanted_timer();
-				siren.reposition_relative_to(player.transform.position, 35);
+				reposition = false;
 			}
 		}
 	}
@@ -314,8 +408,8 @@ void PlayMode::update(float elapsed) {
 	//move camera:
 	float cos_yaw = std::cosf(cam_info.yaw);
 	float sin_yaw = std::sinf(cam_info.yaw);
-	// float cos_pitch = std::cosf(cam_info.pitch);
-	// float sin_pitch = std::sinf(cam_info.pitch);
+	float cos_pitch = std::cosf(cam_info.pitch);
+	float sin_pitch = std::sinf(cam_info.pitch);
 	{	
 		float yaw_to_siren = std::atan2(-to_siren.x, to_siren.y);
 		float pitch_to_siren = glm::radians(90.f);
@@ -353,10 +447,17 @@ void PlayMode::update(float elapsed) {
 		}
 
 		// add influence from siren
-
 		bool play_footsteps = false;
 		if (siren.active && to_siren != glm::vec3(0.f) && player.get_enchanted() > .05f) {
-			player.transform.position += to_siren * dist * player.get_enchanted() * .5f;
+			// clip movement if collision
+			for (Collider *col : colliders) {
+				if (col == &player.col) continue;
+				if (player.col.clip_movement(*col, to_siren, dist) && glm::length(to_siren) < .01f) {
+					player.dead = true;
+					return;
+				}
+			}
+			player.transform.position += to_siren * dist * player.get_enchanted() * .625f;
 			play_footsteps = true;
 		}
 		if (player_dir != glm::vec3(0.f) && player.get_enchanted() < player.MIN_TO_ENCHANT_STATUS) {
@@ -372,6 +473,45 @@ void PlayMode::update(float elapsed) {
 		if (play_footsteps) SoundManager::play_sfx(footsteps_samples, (lshift.pressed ? .3f : .4f), elapsed, 0.f, sound_muffler);
 	}
 
+	// handle interactions
+	{
+		static bool interacted = false;
+		if (interact.pressed && !interacted && player.get_enchanted() < player.MIN_TO_ENCHANT_STATUS) {
+			Lever *closest = nullptr;
+			float closest_resp = 100.f;
+			for (auto &lever : levers) {
+				assert(lever.drawable->transform);
+				glm::vec3 to = (lever.drawable->transform->make_world_from_local() * glm::vec4(lever.drawable->transform->position + lever.offset, 1.f) 
+					- player.transform.make_world_from_local() * glm::vec4(camera->transform->position, 1.f));
+
+					if (glm::length(to) <= player.INTERACT_RANGE) {
+					glm::vec3 forward = glm::vec3(
+						-sin_pitch * sin_yaw,
+						sin_pitch * cos_yaw,
+						-cos_pitch
+					);
+
+					float resp = glm::dot(glm::normalize(to), forward);
+					if (resp >= std::cos(lever.interact_angle) && resp <= closest_resp) {
+						closest_resp = resp;
+						closest = &lever;
+					}
+				}
+			}           
+			if (closest) closest->interact();
+			interacted = true;
+		}
+		else if (!interact.pressed && interacted) {
+			interacted = false;
+		}
+
+		// update levers
+		assert(levers.size() == 5);
+		for (auto lever : levers) {
+			lever.update(elapsed);
+		}
+	}
+
 	// ambient sounds
 	{
 		SoundManager::play_sfx(rig_samples, 45.f, elapsed, 20.f, .5f * sound_muffler);
@@ -384,6 +524,7 @@ void PlayMode::update(float elapsed) {
 	down.downs = 0;
 	lshift.downs = 0;
 	space.downs = 0;
+	interact.downs = 0;
 }
 
 void PlayMode::draw(glm::uvec2 const &drawable_size) {

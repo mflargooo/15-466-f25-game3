@@ -4,6 +4,7 @@
 #include "Sound.hpp"
 
 #include "Collision.hpp"
+#include "Interactable.hpp"
 
 #include <glm/glm.hpp>
 
@@ -25,7 +26,7 @@ struct PlayMode : Mode {
 	struct Button {
 		uint8_t downs = 0;
 		uint8_t pressed = 0;
-	} left, right, down, up, lshift, space;
+	} left, right, down, up, lshift, space, interact;
 
 	//local copy of the game scene (so code can change it during gameplay):
 	Scene scene;
@@ -41,7 +42,10 @@ struct PlayMode : Mode {
 
 		Collider col = Collider(&transform);
 
+		float INTERACT_RANGE = 6.f;
 		const float MIN_TO_ENCHANT_STATUS = .25f;
+		bool dead = false;
+
 		void add_enchanted(float delta);
 		float get_enchanted();
 
@@ -75,7 +79,7 @@ struct PlayMode : Mode {
 		private:
 			float MAX_VOLUME = .35f;
 			float ACTIVATE_COOLDOWN = 30.f;
-			float time_until_active = 10.f;
+			float time_until_active = 2000.f;
 	} siren;
 	
 	//camera:
@@ -85,6 +89,9 @@ struct PlayMode : Mode {
 		float pitch = glm::radians(90.f);
 	} cam_info;
 
-	private:
-		float MIN_MUFFLED_SOUND_COEFF = .2f;
+	// order of levers is red, green, blue, orange, purple
+	std::vector< Lever > levers;
+	std::vector< size_t > solution;
+
+	float MIN_MUFFLED_SOUND_COEFF = .2f;
 };

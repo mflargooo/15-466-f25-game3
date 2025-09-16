@@ -759,11 +759,13 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 			}
 		}
 		
+/*
 		// world drawing for physics debugging.
 		DrawLines world(glm::mat3x4(camera->make_projection()) * camera->transform->make_local_from_world());
 		for (Collider *col : colliders) {
 			world.draw_box(col->get_transformation_matrix(), glm::u8vec4(255, 0, 0, 255));
 		}
+*/
 	}
 	GL_ERRORS();
 }
